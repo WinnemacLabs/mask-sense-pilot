@@ -7,7 +7,7 @@ stop            – stop capture, close CSV, freeze plot
 (other fw cmds) – zero, rate <Hz>, info, dump, help, init <idx> …
 
 Usage:
-  python rsc_cli.py  COM4
+  python mask-logger-data-ingestion.py  COM4
 
 Changes v2 (3‑sensor support)
 -----------------------------
