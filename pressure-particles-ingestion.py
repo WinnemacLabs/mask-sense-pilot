@@ -20,7 +20,7 @@ Usage:
 """
 import argparse
 import threading
-import queue
+import queue  
 import datetime
 import csv
 import sys
@@ -108,7 +108,7 @@ def main():
     if not args.port:
         args.port = choose_port("Teensy", available)
     if not args.wrpas:
-        candidates = [p for p in available if "FT232" in p.description or "WRPAS" in p.description]
+        candidates = [p for p in available]
         args.wrpas = choose_port("WRPAS", candidates, allow_skip=True)
 
     if not args.port:
@@ -166,7 +166,7 @@ def main():
     ax2.set_ylabel("Particle Conc.")
     ax.set_xlim(-buf_sec, 0)
     ax.set_ylim(-100, 100)
-    ax2.set_ylim(0, 50000)
+    ax2.set_ylim(0, 5000)
     ax.legend(loc='upper left')
     ax2.legend(loc='upper right')
     plt.show(block=False)
