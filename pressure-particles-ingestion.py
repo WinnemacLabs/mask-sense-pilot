@@ -86,7 +86,7 @@ def open_log(label: str):
         "t_us",
         "Pa_Global","Pa_Vertical","Pa_Horizontal",
         "raw_Global","raw_Vertical","raw_Horizontal",
-        "Conc_Ch1","Conc_Ch2"
+        "mask_particles","ambient_particles"
     ])
     print(f"# logging → {name}")
     return fh, csv_wr, name
