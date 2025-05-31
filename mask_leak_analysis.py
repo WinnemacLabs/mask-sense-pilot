@@ -219,7 +219,7 @@ def main():
     for f in args.csv:
         df, fs = load_data(f)
         print(f"Loaded {f}  |  fs ≈ {fs:.1f} Hz")
-        if args.force-lag is not None:
+        if args.force_lag is not None:
             lag = args.force_lag
             print(f"   using user‑supplied lag: {lag:.2f} s")
         else:
