@@ -15,7 +15,7 @@ Commands:
   exit, quit       – exit script
 
 Usage:
-  python3 rsc_cli.py [--port /dev/cu...] [--wrpas /dev/cu...] [--baud 921600]
+  python3 pressure-particles-ingestion.py [--port /dev/cu...] [--wrpas /dev/cu...] [--baud 921600]
                        [--window 30] [--debug-wrpas]
 """
 import argparse
