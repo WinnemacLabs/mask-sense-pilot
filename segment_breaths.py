@@ -78,7 +78,7 @@ def main() -> None:
     breath_col = np.full(len(df), np.nan)
     for i, (start, end) in enumerate(segments, 1):
         breath_col[start:end] = i
-    df["breath"] = breath_col.astype("Int64")
+    df["breath"] = pd.Series(breath_col, dtype="Int64")
 
     save_to_db(df, Path(args.db), Path(args.csv).name)
 
