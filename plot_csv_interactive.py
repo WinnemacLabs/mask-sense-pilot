@@ -3,7 +3,10 @@ import sys
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
+
+pio.renderers.default = "browser"
 
 
 def main() -> None:
@@ -11,10 +14,7 @@ def main() -> None:
         description="Visualize mask sense CSV data with an interactive Plotly graph"
     )
     parser.add_argument("csv", help="Input CSV file from the logger")
-    parser.add_argument(
-        "--output",
-        help="Optional HTML file to save the plot. If omitted, the plot is shown in a browser.",
-    )
+
     args = parser.parse_args()
 
     try:
@@ -66,11 +66,7 @@ def main() -> None:
 
     fig.update_layout(height=600, legend_title_text="Signals")
 
-    if args.output:
-        fig.write_html(args.output)
-        print(f"Saved plot to {args.output}")
-    else:
-        fig.show()
+    fig.show()
 
 
 if __name__ == "__main__":
