@@ -45,7 +45,7 @@ def compute_and_store(conn: sqlite3.Connection) -> None:
             mean_amb = df_breath["ambient_particles"].mean()
             pf = None
             if pd.notna(max_mask) and pd.notna(mean_amb) and mean_amb != 0:
-                pf = float(max_mask) / float(mean_amb)
+                pf = float(mean_amb) / float(max_mask)
             mask = (df["source_file"] == source) & (df["breath"] == b)
             df.loc[mask, "protection_factor"] = pf
     df.to_sql("breath_data", conn, if_exists="replace", index=False)
