@@ -1,0 +1,4 @@
+line-length = 88
+[lint]
+select = ["E", "F"]
+exclude = ["data-explorer.ipynb", "pressure-particles-ingestion.py", "segment_breaths.py", "plot_csv_interactive.py", "calculate_fit_score.py"]
