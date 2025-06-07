@@ -1,0 +1,23 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Database files
+*.sqlite
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Output and temporary data
+output/
+data/
+
+# OS-specific files
+.DS_Store
+
+# IDE folders
+.vscode/
+.idea/
