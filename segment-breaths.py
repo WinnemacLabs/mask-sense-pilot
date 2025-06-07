@@ -50,22 +50,44 @@ def segment_breaths(filtered: np.ndarray, prominence: float = 2.0):
     return list(zip(starts[:-1], starts[1:]))
 
 
-def debug_plot(time_s: np.ndarray, signal: np.ndarray, segments, out_png: Path):
-    """Save a PNG showing the full signal and breath segmentation."""
-    plt.figure(figsize=(12, 4))
-    plt.plot(time_s, signal, lw=0.8, label="Pa_Global (filtered)")
-    ymax, ymin = signal.max(), signal.min()
+def plot_combined(time_s: np.ndarray, filtered_signal: np.ndarray, raw_signal: np.ndarray, segments, out_png: Path):
+    """Save a PNG with two subplots: filtered+regions, and raw+segment lines."""
+    from plotly.subplots import make_subplots
+    import plotly.graph_objects as go
+
+    out_dir = Path("output") / "breath-segmentation"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_png = out_dir / out_png.name
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=False, vertical_spacing=0.12,
+                        subplot_titles=("Filtered Signal with Breath Regions", "Raw Signal with Segment Boundaries"))
+
+    # Subplot 1: Filtered signal with breath regions
+    fig.add_trace(
+        go.Scatter(x=time_s, y=filtered_signal, mode="lines", name="Pa_Global (filtered)"),
+        row=1, col=1
+    )
     for s, e in segments:
-        plt.axvspan(time_s[s], time_s[e], color="orange", alpha=0.15)
-        plt.axvline(time_s[s], color="red", lw=0.5)
-    plt.xlabel("Time (s)")
-    plt.ylabel("Pressure (Pa)")
-    plt.title("Breath segmentation debug")
-    plt.tight_layout()
-    out_png.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_png, dpi=150)
-    plt.close()
-    print(f"Debug plot saved ➜ {out_png}")
+        fig.add_vrect(x0=time_s[s], x1=time_s[e], fillcolor="orange", opacity=0.15, line_width=0, row=1, col=1)
+        fig.add_vline(x=time_s[s], line_color="red", line_dash="solid", row=1, col=1)
+
+    fig.update_yaxes(title_text="Pressure (Pa)", row=1, col=1)
+    fig.update_xaxes(title_text="Time (s)", row=1, col=1)
+
+    # Subplot 2: Raw signal with segment boundaries
+    fig.add_trace(
+        go.Scatter(x=list(range(len(raw_signal))), y=raw_signal, mode="lines", name="Pa_Global (raw)"),
+        row=2, col=1
+    )
+    for start, end in segments:
+        fig.add_vline(x=start, line_color="green", line_dash="dash", row=2, col=1)
+        fig.add_vline(x=end, line_color="red", line_dash="dash", row=2, col=1)
+    fig.update_yaxes(title_text="Pressure (Pa)", row=2, col=1)
+    fig.update_xaxes(title_text="Sample", row=2, col=1)
+
+    fig.update_layout(height=900, title="Breath Segmentation: Filtered & Raw Signal")
+    fig.write_image(out_png)
+    print(f"Combined plot saved ➜ {out_png}")
 
 
 # ----------------------------------------------------------------------------------
@@ -154,38 +176,14 @@ def main() -> None:
         breath_idx[s:e] = i
     df["breath"] = pd.Series(breath_idx, dtype="Int64")
 
-    # Save plot covering full signal
-    out_png = Path(args.plot_file) if args.plot_file else csv_path.with_name(f"{csv_path.stem}_breaths.png")
-    debug_plot(time_s.to_numpy(), df["Pa_Global_Filtered"].to_numpy(), segments, out_png)
+    # Save combined plot covering full signal and segment boundaries
+    out_png = Path(f"breath_segments_{csv_path.stem}_combined.png")
+    plot_combined(time_s.to_numpy(), df["Pa_Global_Filtered"].to_numpy(), df["Pa_Global"].to_numpy(), segments, out_png)
 
     # Write to DB
     save_to_db(df, Path(args.db), csv_path.name)
     print(f"Breath segmentation written to {args.db} (table: breath_data)")
-
-    analysis_dir = Path("output")
-    analysis_dir.mkdir(parents=True, exist_ok=True)
-    fig2 = go.Figure()
-    fig2.add_trace(
-        go.Scatter(
-            x=list(range(len(df["Pa_Global"]))),
-            y=df["Pa_Global"],
-            mode="lines",
-            name="Filtered Data"
-        )
-    )
-    for start, end in segments:
-        fig2.add_vline(x=start, line_color="green", line_dash="dash")
-        fig2.add_vline(x=end, line_color="red", line_dash="dash")
-    fig2.update_layout(
-        title="Segmented Breaths",
-        xaxis_title="Sample",
-        yaxis_title="Pa",
-    )
     
-    # write the figure to a PNG in the output directory, tagging it with the source file name
-    fig2.write_image(analysis_dir / f"breath_segments_{Path(args.csv).stem}.png")
-    # Show the figure in the browser
-    fig2.show()
 
 
 if __name__ == "__main__":
