@@ -13,7 +13,6 @@ __pycache__/
 
 # Output and temporary data
 output/
-data/
 
 # OS-specific files
 .DS_Store
