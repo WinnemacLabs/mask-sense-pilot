@@ -10,49 +10,98 @@ When the sunlight strikes raindrops in the air, they act like a prism and form a
 
 
 def countdown(seconds, message=""):
-    """Simple textual countdown timer."""
+    """Simple textual countdown timer that allows GUI updates with minimal flicker."""
+    import matplotlib.pyplot as plt
     for remaining in range(seconds, 0, -1):
         print(f"{message} {remaining}s remaining", end="\r")
-        time.sleep(1)
+        plt.pause(1)  # Only pause once per second
     print(" " * 40, end="\r")
 
 
 def run_mask(session, participant, mask_label, with_leak=False):
-    """Guide participant through recordings for one mask."""
+    import shutil
+    import sys
     leak_tag = "_leak" if with_leak else ""
+    term_width = shutil.get_terminal_size((80, 20)).columns
+    border = "=" * term_width
+    mask_display = f"Mask: {mask_label}{leak_tag}"
+    part_display = f"Participant: {participant}"
+    header = f"{part_display} | {mask_display}"
+    print("\n" * 2)
+    print(border)
+    print(header.center(term_width))
+    print(border)
+    print()
 
-    print("Participant: Fit the mask on your face now.")
-    input("Press Enter when the mask feels comfortable...")
+    def prompt(msg, submsg=None):
+        print("\n" + "-" * term_width)
+        print(msg.center(term_width))
+        if submsg:
+            print(submsg.center(term_width))
+        print("-" * term_width)
+        return input("\nPress Enter to continue (or type 'q' to quit)...")
 
-    input("Hold your breath and press Enter to begin sensor zeroing...")
-    session.send_teensy("zero")
-    countdown(3, "Zeroing—keep holding")
-    print("Sensors zeroed.\n")
+    def safe_countdown(seconds, message=""):
+        import sys
+        import matplotlib.pyplot as plt
 
-    input("Press Enter to start quiet breathing...")
-    lbl = f"P{participant}_{mask_label}{leak_tag}_quiet_breathing"
-    session.start_recording(lbl)
-    print("Breathe quietly for 3 minutes.")
-    countdown(3 * 60, "Quiet breathing")
-    session.stop_recording()
-    print("Quiet breathing complete.\n")
+        for remaining in range(seconds, 0, -1):
+            print(f"{message} {remaining}s remaining", end="\r")
+            plt.pause(5)  # Allow GUI updates
+            if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                user_input = sys.stdin.readline().strip()
+                if user_input.lower() == 'q':
+                    print("\n[INFO] Quitting test early. Sending stop command to Teensy...")
+                    session.stop_recording()
+                    session.wait_for_serial_message("# streaming OFF", timeout=5)
+                    print("[INFO] Teensy stopped. Exiting test.")
+                    session.close()
+                    sys.exit(0)
+        print(" " * 60, end="\r")
 
-    input("Press Enter to start deep breathing...")
-    lbl = f"P{participant}_{mask_label}{leak_tag}_deep_breathing"
-    session.start_recording(lbl)
-    print("Now breathe deeply for 1 minute (do not hyperventilate).")
-    countdown(60, "Deep breathing")
-    session.stop_recording()
-    print("Deep breathing complete.\n")
+    import select
+    try:
+        prompt("Fit the mask on your face now.", "Adjust for comfort and seal.")
+        prompt("Hold your breath for sensor zeroing.", "Remain still and silent.")
+        session.send_teensy("zero")
+        print("\nZeroing—keep holding\n")
+        session.wait_for_serial_message("# new zeros:", timeout=5)
+        print("\nSensors zeroed.\n")
 
-    input("Press Enter to start reading the rainbow passage...")
-    lbl = f"P{participant}_{mask_label}{leak_tag}_rainbow"
-    session.start_recording(lbl)
-    print("Please read the following passage aloud:\n")
-    print(RAINBOW)
-    input("Press Enter when finished reading...")
-    session.stop_recording()
-    print("Reading complete.\n")
+        prompt("Start quiet breathing.", "Breathe normally for 3 minutes.")
+        lbl = f"P{participant}_{mask_label}{leak_tag}_quiet_breathing"
+        session.start_recording(lbl)
+        session.wait_for_serial_message("# streaming ON", timeout=5)
+        safe_countdown(15, "Quiet breathing")
+        session.stop_recording()
+        session.wait_for_serial_message("# streaming OFF", timeout=5)
+        print("\nQuiet breathing complete.\n")
+
+        prompt("Start deep breathing.", "Breathe deeply (not hyperventilating) for 1 minute.")
+        lbl = f"P{participant}_{mask_label}{leak_tag}_deep_breathing"
+        session.start_recording(lbl)
+        session.wait_for_serial_message("# streaming ON", timeout=5)
+        safe_countdown(60, "Deep breathing")
+        session.stop_recording()
+        session.wait_for_serial_message("# streaming OFF", timeout=5)
+        print("\nDeep breathing complete.\n")
+
+        prompt("Read the Rainbow Passage aloud.", "Read clearly and at a natural pace.")
+        lbl = f"P{participant}_{mask_label}{leak_tag}_rainbow"
+        session.start_recording(lbl)
+        session.wait_for_serial_message("# streaming ON", timeout=5)
+        print("\n" + "-" * term_width)
+        print("RAINBOW PASSAGE:".center(term_width))
+        print("-" * term_width)
+        print(RAINBOW)
+        print("-" * term_width)
+        input("\nPress Enter when finished reading...")
+        session.stop_recording()
+        session.wait_for_serial_message("# streaming OFF", timeout=5)
+        print("\nReading complete.\n")
+    except KeyboardInterrupt:
+        print("\n[INFO] Test interrupted by user. Teensy has been stopped.")
+        return
 
 
 def main():
@@ -61,17 +110,21 @@ def main():
     mask2 = input("Mask 2 label: ").strip() or "mask2"
 
     session = PressureParticlesSession()
+    # Stop teensy at the start of the session
+    print("Resetting Teensy...")
+    session.send_teensy("stop")
+    time.sleep(1) 
 
     try:
         run_mask(session, participant, mask1, with_leak=False)
-        print("Apply polyfilla leak to right side of mask 1 and press Enter.")
+        print("Apply polyfil leak to right side of mask 1 and press Enter.")
         input()
         run_mask(session, participant, mask1, with_leak=True)
 
         print("Switch to mask 2 and press Enter when ready.")
         input()
         run_mask(session, participant, mask2, with_leak=False)
-        print("Apply polyfilla leak to right side of mask 2 and press Enter.")
+        print("Apply polyfil leak to right side of mask 2 and press Enter.")
         input()
         run_mask(session, participant, mask2, with_leak=True)
     finally:

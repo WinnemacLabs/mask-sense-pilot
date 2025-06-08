@@ -170,7 +170,7 @@ class PressureParticlesSession:
         self.ax2.legend(loc='upper right')
         plt.show(block=False)
 
-        self.ani = anim.FuncAnimation(self.fig, self._update_plot, interval=100, blit=True)
+        self.ani = anim.FuncAnimation(self.fig, self._update_plot, interval=100, blit=True, cache_frame_data=False)
 
     # ---------------------------------------------
     def _update_plot(self, _):
@@ -255,6 +255,7 @@ class PressureParticlesSession:
         if self.wrpas_worker:
             self.wrpas_worker.ser.write(b"CCT 1\r\n")
         self.worker.ser.write(b"start\r\n")
+        self.capturing = True  # Set immediately after sending start
 
     def stop_recording(self):
         if not self.capturing:
@@ -263,7 +264,7 @@ class PressureParticlesSession:
         if self.wrpas_worker:
             self.wrpas_worker.ser.write(b"CCT 0\r\n")
         self.worker.ser.write(b"stop\r\n")
-        self.capturing = False
+        self.capturing = False  # Set immediately after sending stop
         if self.log_fh:
             self.log_fh.close()
             print(f"# closed {self.log_fh.name}")
@@ -318,6 +319,21 @@ class PressureParticlesSession:
             print("\nExiting…")
         finally:
             self.close()
+
+    # ---------------------------------------------
+    def wait_for_serial_message(self, substring, timeout=5):
+        import time
+        start = time.time()
+        while time.time() - start < timeout:
+            while not self.rxq.empty():
+                line = self.rxq.get()
+                if (line.startswith("#")):
+                    print(line)
+                if substring in line:
+                    return True
+            time.sleep(0.05)
+        print(f"[WARN] Did not see '{substring}' in serial output within {timeout} seconds.")
+        return False
 
 
 # ──────────────────────────────────────────────────────────────
