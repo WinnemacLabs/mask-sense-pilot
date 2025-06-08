@@ -55,4 +55,3 @@ Prepare two different N95 masks using the following procedure:
 11. Introduce face-seal leak using polyfilla on right side of mask. Repeat above procedure
 
 12. Repeat above procedure with mask #2
-
