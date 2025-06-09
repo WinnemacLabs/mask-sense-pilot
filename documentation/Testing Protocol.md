@@ -52,6 +52,6 @@ Prepare two different N95 masks using the following procedure:
 
 >>> When the sunlight strikes raindrops in the air, they act like a prism and form a rainbow. The rainbow is a division of white light into many beautiful colors. These take the shape of a long round arch, with its path high above, and its two ends apparently beyond the horizon. There is, according to legend, a boiling pot of gold at one end. People look, but no one ever finds it.When a man looks for something beyond reach, his friends say he is looking for the pot of gold at the end of the rainbow. 
 
-11. Introduce face-seal leak using polyfilla on right side of mask. Repeat above procedure
-
-12. Repeat above procedure with mask #2
+11. Test Functional Residual Capacity (FRC) Reset -- Participant exhales gently and passively without forcing out any additional air to reach their FRC. Participant then breathes normally for 30 seconds and performs another FRC reset.
+12. Introduce face-seal leak using polyfilla on right side of mask. Repeat above procedure
+13. Repeat above procedure with mask #2
