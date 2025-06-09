@@ -6,6 +6,7 @@ from pressure_particles_ingestion import PressureParticlesSession
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 RAINBOW = textwrap.dedent("""
                         When the sunlight strikes raindrops in the air, they act like a prism and form a rainbow. 
@@ -16,6 +17,15 @@ RAINBOW = textwrap.dedent("""
                         When a man looks for something beyond reach, his friends say he is looking for the pot of gold at the end of the rainbow.
 """)
 
+def beep(num_times=2):
+    """Beep sound to signal important events."""
+    for _ in range(num_times):
+        os.system('tput bel') 
+        time.sleep(0.2) 
+
+def clear_screen():
+    sys.stdout.write('\033c')
+    sys.stdout.flush()
 
 def countdown(seconds, message=""):
     """Simple textual countdown timer that allows GUI updates with minimal flicker."""
@@ -41,21 +51,36 @@ def run_mask(session, participant, mask_label, with_leak=False):
     print(border)
     print()
 
-    def prompt(msg, submsg=None):
+    def prompt(msg, submsg=None, prompt_msg="\nPress Enter to continue...", prompt_enter=True):
         print("\n" + "-" * term_width)
         print(msg.center(term_width))
         if submsg:
             print(submsg.center(term_width))
         print("-" * term_width)
-        return input("\nPress Enter to continue...")
+        if prompt_enter:
+            print(prompt_msg)
+            return input()
+        else:
+            return
 
     def safe_countdown(seconds, message=""):
         import sys
         import matplotlib.pyplot as plt
 
+        print("\n" + "=" * term_width)
+        print(message.center(term_width))
+        print("=" * term_width)
+
         for remaining in range(seconds, 0, -5):
-            print(f"{message} {remaining}s remaining   ", end="\r")
-            plt.pause(5)  # Allow GUI updates
+            print(f"{remaining}s REMAINING   ", end="\r")
+            # make progress bar
+            bar_length = 30
+            filled_length = int(bar_length * (seconds - remaining) / seconds)
+            bar = '█' * filled_length + '-' * (bar_length - filled_length)
+            print(f"[{bar}] {remaining}s remaining", end="\r")
+            # allow plot updates
+            plt.pause(5)
+            # Check for user input to quit
             if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                 user_input = sys.stdin.readline().strip()
                 if user_input.lower() == 'q':
@@ -63,8 +88,7 @@ def run_mask(session, participant, mask_label, with_leak=False):
                     session.stop_recording()
                     session.wait_for_serial_message("# streaming OFF", timeout=5)
                     print("[INFO] Teensy stopped. Exiting test.")
-                    session.close()
-                    sys.exit(0)
+                    return
         print(" " * 60, end="\r")
 
     def verify_zero(participant, mask_label, leak_tag, duration=5):
@@ -74,7 +98,7 @@ def run_mask(session, participant, mask_label, with_leak=False):
         os.makedirs(folder_path, exist_ok=True)
 
         while True:
-            input("Hold your breath again for zero verification, then press Enter...")
+            prompt("Hold your breath again for zero verification. Press enter when holding...", prompt_msg="")
             lbl = f"P{participant}_{mask_label}{leak_tag}_zero_check"
 
             session.start_recording(lbl)
@@ -116,32 +140,44 @@ def run_mask(session, participant, mask_label, with_leak=False):
                 plt.savefig(plot_path)
                 plt.show(block=False)
 
-                print("Zero verification PASS\n")
+                print("\nZero verification PASS. You can breathe again!\n")
+                time.sleep(3)
                 return
             else:
-                print("Zero verification FAIL — re-zeroing\n")
-                input("Hold your breath and press Enter to re-zero...")
+                print("\nZero verification FAIL — re-zeroing\n")
+                input("\nHold your breath and press Enter to re-zero...")
                 session.send_teensy("zero")
                 session.wait_for_serial_message("# new zeros:", timeout=5)
 
 
     import select
     try:
+        clear_screen()
+        beep(2)
         prompt("Fit the mask on your face now.", "Adjust for comfort and seal.")
         lbl = f"P{participant}_{mask_label}{leak_tag}_zeroing"
         session.start_recording(lbl)
         session.wait_for_serial_message("# streaming ON", timeout=5)
-        input("Hold your breath for sensor zeroing. Remain still and silent. Press enter when you've started holding your breath.")
+
+        clear_screen()
+        beep(2)
+        prompt("Hold your breath for sensor zeroing. Remain still and silent. Press enter when you've started holding your breath.", prompt_msg="")
         session.stop_recording()
         session.wait_for_serial_message("# streaming OFF", timeout=5)
         session.send_teensy("zero")
         print("\nZeroing (keep holding breath)\n")
         session.wait_for_serial_message("# new zeros:", timeout=5)
-        print("\nSensors zeroed.\n")
+        print("\nSensors zeroed. You can breathe now!\n")
+        time.sleep(3)
 
-        verify_zero()
+        beep(1)
 
-        prompt("Start quiet breathing.", "Breathe normally for 3 minutes.")
+        clear_screen()
+        verify_zero(participant, mask_label, leak_tag)
+
+        clear_screen()
+        beep(2)
+        prompt("Start quiet breathing.", "Breathe normally for 3 minutes.", prompt_msg="Press Enter to start.")
         lbl = f"P{participant}_{mask_label}{leak_tag}_quiet_breathing"
         session.start_recording(lbl)
         session.wait_for_serial_message("# streaming ON", timeout=5)
@@ -150,6 +186,8 @@ def run_mask(session, participant, mask_label, with_leak=False):
         session.wait_for_serial_message("# streaming OFF", timeout=5)
         print("\nQuiet breathing complete.\n")
 
+        clear_screen()
+        beep(2)
         prompt("Start deep breathing.", "Breathe deeply (not hyperventilating) for 1 minute.")
         lbl = f"P{participant}_{mask_label}{leak_tag}_deep_breathing"
         session.start_recording(lbl)
@@ -159,7 +197,10 @@ def run_mask(session, participant, mask_label, with_leak=False):
         session.wait_for_serial_message("# streaming OFF", timeout=5)
         print("\nDeep breathing complete.\n")
 
-        prompt("Read the Rainbow Passage aloud.", "Read clearly and at a natural pace.")
+        clear_screen()
+        beep(2)
+        prompt("Read the Rainbow Passage aloud.", "Read clearly and at a natural pace.", prompt_enter=False)
+        time.sleep(5)
         lbl = f"P{participant}_{mask_label}{leak_tag}_rainbow"
         session.start_recording(lbl)
         session.wait_for_serial_message("# streaming ON", timeout=5)
@@ -168,22 +209,24 @@ def run_mask(session, participant, mask_label, with_leak=False):
         print("-" * term_width)
         print(RAINBOW)
         print("-" * term_width)
-        input("\nPress Enter when finished reading...")
+        prompt("\nPress Enter when finished reading...", prompt_msg = "")
         session.stop_recording()
         session.wait_for_serial_message("# streaming OFF", timeout=5)
         print("\nReading complete.\n")
 
-        prompt("Prepare for Functional Residual Capacity (FRC) Reset.", "When instructed, take a gentle breath in, then exhale passively and completely without forcing additional air out.")
+        clear_screen()
+        beep(2)
+        prompt("Functional Residual Capacity (FRC) Reset.", "Take a gentle breath in, then exhale passively and completely without forcing additional air out.", prompt_enter=False)
+        time.sleep(5)
         lbl = f"P{participant}_{mask_label}{leak_tag}_frc_reset"
 
-        print("Take a gentle breath in, then exhale passively and completely without forcing additional air out. Pause for 2-3 seconds, press enter, and then resume quiet breathing when prompted.")
-        
         session.start_recording(f"P{participant}_{mask_label}{leak_tag}_frc_reset_init")
         session.wait_for_serial_message("# streaming ON", timeout=5)
 
-        input("Press enter after pausing 2-3 seconds")
+        prompt("\nPress enter after pausing at the end of your exhale for 2-3 seconds and resume quiet breathing when prompted\n", prompt_msg="")
         time.sleep(1)
-        print("Resume quiet breathing")
+        beep(1)
+        prompt("\nResume quiet breathing\n", prompt_enter=False)
 
         session.stop_recording()
         session.wait_for_serial_message("# streaming OFF", timeout=5)
@@ -191,9 +234,9 @@ def run_mask(session, participant, mask_label, with_leak=False):
         session.start_recording(lbl)
         session.wait_for_serial_message("# streaming ON", timeout=5)
         
-        safe_countdown(30, "Quiet breathing from FRC reset. Perform another FRC reset when prompted.")
-        print("Perform final FRC reset. Take a gentle breath in, then exhale passively and completely without forcing additional air out. Pause for 2-3 seconds.")
-        input("Press Enter after pausing 2-3 seconds.")
+        safe_countdown(30, "\nQuiet breathing from FRC reset. Perform another FRC reset when prompted.\n")
+        beep(1)
+        prompt("\n\n\nPerform final FRC reset. Take a gentle breath in, then exhale passively and completely without forcing additional air out. Pause for 2-3 seconds and press Enter.\n", prompt_msg="")
 
         session.stop_recording()
         session.wait_for_serial_message("# streaming OFF", timeout=5)
@@ -219,9 +262,9 @@ def main():
     session.wait_for_serial_message("1000", timeout=5)
     time.sleep(1) 
 
-    print("Confirm setup:")
-    input("1. WRPAS wick saturated?")
-    input("2. Tubes connected to correct ports?")
+    print("\nConfirm setup:")
+    input("\n1. WRPAS wick saturated?")
+    input("\n2. Tubes connected to correct ports?")
 
     print("Beginning test!")
 
