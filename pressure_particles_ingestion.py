@@ -85,7 +85,7 @@ class SerialWorker(threading.Thread):
 # ──────────────────────────────────────────────────────────────
 def open_log(label: str):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = f"rsc_{label}_{ts}.csv" if label else f"rsc_{ts}.csv"
+    name = f"data/rsc_{label}_{ts}.csv" if label else f"data/rsc_{ts}.csv"
     fh = open(name, "w", newline="")
     csv_wr = csv.writer(fh)
     csv_wr.writerow([
