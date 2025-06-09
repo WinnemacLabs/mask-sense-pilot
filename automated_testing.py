@@ -97,6 +97,7 @@ def run_mask(session, participant, mask_label, with_leak=False):
             print(f"Zero check mean: {mean:.3f} Pa | stdev: {std:.3f} Pa")
             if abs(mean) <= 0.2 and std <= 0.5:
                 print("Zero verification PASS\n")
+                
                 return
             else:
                 print("Zero verification FAIL — re-zeroing\n")
@@ -162,7 +163,7 @@ def run_mask(session, participant, mask_label, with_leak=False):
 
         input("Press enter after pausing 2-3 seconds")
         time.sleep(1)
-        prompt("Resume quiet breathing")
+        print("Resume quiet breathing")
 
         session.stop_recording()
         session.wait_for_serial_message("# streaming OFF", timeout=5)
@@ -197,6 +198,12 @@ def main():
     session.send_teensy("rate 1000")
     session.wait_for_serial_message("1000", timeout=5)
     time.sleep(1) 
+
+    print("Confirm setup:")
+    input("1. WRPAS wick saturated?")
+    input("2. Tubes connected to correct ports?")
+
+    print("Beginning test!")
 
     try:
         run_mask(session, participant, mask1, with_leak=False)
