@@ -4,6 +4,8 @@ import time
 import textwrap
 from pressure_particles_ingestion import PressureParticlesSession
 
+import numpy as np
+
 RAINBOW = textwrap.dedent("""
                         When the sunlight strikes raindrops in the air, they act like a prism and form a rainbow. 
                         The rainbow is a division of white light into many beautiful colors. 
@@ -64,6 +66,44 @@ def run_mask(session, participant, mask_label, with_leak=False):
                     sys.exit(0)
         print(" " * 60, end="\r")
 
+    def verify_zero(duration=5):
+        """Capture breath-hold data to verify zeroing."""
+        import matplotlib.pyplot as plt
+
+        while True:
+            input("Hold your breath again for zero verification, then press Enter...")
+            lbl = f"P{participant}_{mask_label}{leak_tag}_zero_check"
+            session.start_recording(lbl)
+            session.wait_for_serial_message("# streaming ON", timeout=5)
+            countdown(duration, "Verifying zero")
+            session.stop_recording()
+            session.wait_for_serial_message("# streaming OFF", timeout=5)
+
+            if not session.p_g:
+                print("[WARN] No data captured for verification.")
+                continue
+            t = np.array(session.ts_buf) - session.ts_buf[0]
+            p = np.array(session.p_g)
+            mean = float(p.mean())
+            std = float(p.std())
+
+            plt.figure()
+            plt.plot(t, p)
+            plt.xlabel("Time (s)")
+            plt.ylabel("Pressure (Pa)")
+            plt.title("Zero Verification")
+            plt.show(block=False)
+
+            print(f"Zero check mean: {mean:.3f} Pa | stdev: {std:.3f} Pa")
+            if abs(mean) <= 0.2 and std <= 0.5:
+                print("Zero verification PASS\n")
+                return
+            else:
+                print("Zero verification FAIL — re-zeroing\n")
+                input("Hold your breath and press Enter to re-zero...")
+                session.send_teensy("zero")
+                session.wait_for_serial_message("# new zeros:", timeout=5)
+
     import select
     try:
         prompt("Fit the mask on your face now.", "Adjust for comfort and seal.")
@@ -77,6 +117,8 @@ def run_mask(session, participant, mask_label, with_leak=False):
         session.stop_recording()
         session.wait_for_serial_message("# streaming OFF", timeout=5)
         print("\nSensors zeroed.\n")
+
+        verify_zero()
 
         prompt("Start quiet breathing.", "Breathe normally for 3 minutes.")
         lbl = f"P{participant}_{mask_label}{leak_tag}_quiet_breathing"
