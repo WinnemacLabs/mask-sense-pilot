@@ -71,11 +71,11 @@ def run_mask(session, participant, mask_label, with_leak=False):
         session.start_recording(lbl)
         session.wait_for_serial_message("# streaming ON", timeout=5)
         input("Hold your breath for sensor zeroing. Remain still and silent. Press enter when you've started holding your breath.")
+        session.stop_recording()
+        session.wait_for_serial_message("# streaming OFF", timeout=5)
         session.send_teensy("zero")
         print("\nZeroing (keep holding breath)\n")
         session.wait_for_serial_message("# new zeros:", timeout=5)
-        session.stop_recording()
-        session.wait_for_serial_message("# streaming OFF", timeout=5)
         print("\nSensors zeroed.\n")
 
         prompt("Start quiet breathing.", "Breathe normally for 3 minutes.")
