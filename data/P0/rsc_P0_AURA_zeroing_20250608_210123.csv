@@ -1,3 +1,9 @@
+# Participant: P0
+# Mask Type: AURA
+# Fit Condition: no_leak
+# Exercise: zeroing
+# Date: 20250608
+# Time: 210123
 t_us,Pa_Global,Pa_Vertical,Pa_Horizontal,raw_Global,raw_Vertical,raw_Horizontal,mask_particles,ambient_particles
 3544539583,4.108,0.013,0.065,-322353,-483457,116723,723.7,10784.1
 3544540566,4.226,0.034,0.043,-322097,-483370,116629,723.7,10784.1
