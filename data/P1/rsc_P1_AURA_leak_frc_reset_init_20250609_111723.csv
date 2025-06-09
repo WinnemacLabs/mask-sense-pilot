@@ -1,3 +1,9 @@
+# Participant: P1
+# Mask Type: AURA
+# Fit Condition: leak
+# Exercise: frc_reset_init
+# Date: 20250609
+# Time: 111723
 t_us,Pa_Global,Pa_Vertical,Pa_Horizontal,raw_Global,raw_Vertical,raw_Horizontal,mask_particles,ambient_particles
 1310598117,7.679,-0.283,-0.572,-316300,-487434,112312,420.1,3096.5
 1310598733,7.783,-0.261,-0.665,-316073,-487339,111923,420.1,3096.5

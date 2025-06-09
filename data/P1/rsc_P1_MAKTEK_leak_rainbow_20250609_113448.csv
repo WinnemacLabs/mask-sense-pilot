@@ -1,3 +1,9 @@
+# Participant: P1
+# Mask Type: MAKTEK
+# Fit Condition: leak
+# Exercise: rainbow
+# Date: 20250609
+# Time: 113448
 t_us,Pa_Global,Pa_Vertical,Pa_Horizontal,raw_Global,raw_Vertical,raw_Horizontal,mask_particles,ambient_particles
 2355987729,-2.305,0.082,0.205,-337687,-485244,115867,226.5,3537.4
 2355988630,-2.222,0.027,0.155,-337506,-485478,115658,226.5,3537.4

@@ -1,3 +1,9 @@
+# Participant: P1
+# Mask Type: MAKTEK
+# Fit Condition: no_leak
+# Exercise: zero_check
+# Date: 20250609
+# Time: 112300
 t_us,Pa_Global,Pa_Vertical,Pa_Horizontal,raw_Global,raw_Vertical,raw_Horizontal,mask_particles,ambient_particles
 1647584443,-0.025,-0.022,0.053,-332759,-485720,115166,40.9,3117.1
 1647585352,0.037,0.039,0.083,-332624,-485463,115294,40.9,3117.1
