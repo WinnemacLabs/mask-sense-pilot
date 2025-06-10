@@ -7,6 +7,11 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+import platform
+if platform.system() == 'Windows':
+    import msvcrt
+else:
+    msvcrt = None
 
 RAINBOW = textwrap.dedent("""
                         When the sunlight strikes raindrops in the air, they act like a prism and form a rainbow. 
@@ -19,13 +24,21 @@ RAINBOW = textwrap.dedent("""
 
 def beep(num_times=2):
     """Beep sound to signal important events."""
-    for _ in range(num_times):
-        os.system('tput bel') 
-        time.sleep(0.2) 
+    if platform.system() == 'Windows':
+        import winsound
+        for _ in range(num_times):
+            winsound.Beep(1000, 200)
+    else:
+        for _ in range(num_times):
+            os.system('tput bel')
+            time.sleep(0.2) 
 
 def clear_screen():
-    sys.stdout.write('\033c')
-    sys.stdout.flush()
+    if platform.system() == 'Windows':
+        os.system('cls')
+    else:
+        sys.stdout.write('\033c')
+        sys.stdout.flush()
 
 def countdown(seconds, message=""):
     """Simple textual countdown timer that allows GUI updates with minimal flicker."""
@@ -71,6 +84,7 @@ def run_mask(session, participant, mask_label, with_leak=False):
         print(message.center(term_width))
         print("=" * term_width)
 
+        # Replace select.select with a Windows-friendly input check
         for remaining in range(seconds, 0, -5):
             print(f"{remaining}s REMAINING   ", end="\r")
             # make progress bar
@@ -81,14 +95,23 @@ def run_mask(session, participant, mask_label, with_leak=False):
             # allow plot updates
             plt.pause(5)
             # Check for user input to quit
-            if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                user_input = sys.stdin.readline().strip()
-                if user_input.lower() == 'q':
+            if platform.system() == 'Windows':
+                if msvcrt and msvcrt.kbhit() and msvcrt.getch().lower() == b'q':
                     print("\n[INFO] Quitting test early. Sending stop command to Teensy...")
                     session.stop_recording()
                     session.wait_for_serial_message("# streaming OFF", timeout=5)
                     print("[INFO] Teensy stopped. Exiting test.")
                     return
+            else:
+                import select
+                if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                    user_input = sys.stdin.readline().strip()
+                    if user_input.lower() == 'q':
+                        print("\n[INFO] Quitting test early. Sending stop command to Teensy...")
+                        session.stop_recording()
+                        session.wait_for_serial_message("# streaming OFF", timeout=5)
+                        print("[INFO] Teensy stopped. Exiting test.")
+                        return
         print(" " * 60, end="\r")
 
     def verify_zero(participant, mask_label, leak_tag, duration=5):
@@ -150,7 +173,6 @@ def run_mask(session, participant, mask_label, with_leak=False):
                 session.wait_for_serial_message("# new zeros:", timeout=5)
 
 
-    import select
     try:
         clear_screen()
         beep(2)
