@@ -249,6 +249,12 @@ def run_mask(session, participant, mask_label, with_leak=False):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Automated mask/particle/pressure protocol")
+    parser.add_argument("--start-section", choices=["mask1", "mask1_leak", "mask2", "mask2_leak"], default="mask1",
+                        help="Section to start from (default: mask1)")
+    args = parser.parse_args()
+
     participant = input("Participant number: ").strip()
     mask1 = input("Mask 1 label: ").strip() or "mask1"
     mask2 = input("Mask 2 label: ").strip() or "mask2"
@@ -269,17 +275,23 @@ def main():
     print("Beginning test!")
 
     try:
-        run_mask(session, participant, mask1, with_leak=False)
-        print("Apply polyfil leak to right side of mask 1 and press Enter.")
-        input()
-        run_mask(session, participant, mask1, with_leak=True)
-
-        print("Switch to mask 2 and press Enter when ready.")
-        input()
-        run_mask(session, participant, mask2, with_leak=False)
-        print("Apply polyfil leak to right side of mask 2 and press Enter.")
-        input()
-        run_mask(session, participant, mask2, with_leak=True)
+        section_order = ["mask1", "mask1_leak", "mask2", "mask2_leak"]
+        start_idx = section_order.index(args.start_section)
+        for section in section_order[start_idx:]:
+            if section == "mask1":
+                run_mask(session, participant, mask1, with_leak=False)
+                print("Apply polyfil leak to right side of mask 1 and press Enter.")
+                input()
+            elif section == "mask1_leak":
+                run_mask(session, participant, mask1, with_leak=True)
+                print("Switch to mask 2 and press Enter when ready.")
+                input()
+            elif section == "mask2":
+                run_mask(session, participant, mask2, with_leak=False)
+                print("Apply polyfil leak to right side of mask 2 and press Enter.")
+                input()
+            elif section == "mask2_leak":
+                run_mask(session, participant, mask2, with_leak=True)
     finally:
         session.close()
 
