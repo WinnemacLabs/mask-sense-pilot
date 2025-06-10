@@ -43,18 +43,58 @@ def preceding_falling_zero(data: np.ndarray, idx: int) -> int:
     return 0
 
 
-def segment_breaths(filtered: np.ndarray, distance_cutoff: float = 0.0, time_s: np.ndarray = None, peak_height: float = None, trough_height: float = None):
+def filter_clustered_peaks(peaks: np.ndarray, peak_values: np.ndarray, min_distance: int = 10) -> np.ndarray:
+    """
+    Filter peaks to keep only the tallest peak within each cluster.
+    
+    Args:
+        peaks: Array of peak indices
+        peak_values: Array of peak values (heights)
+        min_distance: Minimum distance between peaks (in samples)
+        
+    Returns:
+        Array of filtered peak indices with only the tallest in each cluster
+    """
+    if len(peaks) == 0:
+        return peaks
+    
+    # Sort peaks by their values (heights) in descending order
+    sorted_indices = np.argsort(peak_values)[::-1]
+    filtered_peaks = []
+    
+    for idx in sorted_indices:
+        peak_pos = peaks[idx]
+        # Check if this peak is far enough from already selected peaks
+        is_isolated = True
+        for selected_peak in filtered_peaks:
+            if abs(peak_pos - selected_peak) < min_distance:
+                is_isolated = False
+                break
+        
+        if is_isolated:
+            filtered_peaks.append(peak_pos)
+    
+    # Sort the filtered peaks by position
+    return np.array(sorted(filtered_peaks))
+
+
+def segment_breaths(filtered: np.ndarray, distance_cutoff: float = 0.0, time_s: np.ndarray = None, peak_height: float = None, trough_height: float = None, peak_min_distance: int = 50):
     """List of (start_idx, end_idx) for each breath, with optional minimum trough-to-trough distance in seconds. Only include segments containing both a trough and a peak above the specified heights. Each segment is from the last zero crossing before a valid trough to the last zero crossing before the next valid trough."""
     # Find troughs (negative peaks) with height only
     trough_kwargs = {}
     if trough_height is not None:
         trough_kwargs["height"] = trough_height
     troughs, trough_props = find_peaks(-filtered, **trough_kwargs)
+    
     # Find peaks (positive peaks) with height only
     if peak_height is not None:
         peaks, peak_props = find_peaks(filtered, height=peak_height)
     else:
         peaks, peak_props = find_peaks(filtered)
+    
+    # Filter peaks to keep only the tallest in each cluster
+    if len(peaks) > 0:
+        peaks = filter_clustered_peaks(peaks, filtered[peaks], peak_min_distance)
 
     # Optionally filter troughs by distance
     if distance_cutoff > 0 and time_s is not None and len(troughs) > 1:
@@ -185,6 +225,7 @@ def main() -> None:
         help="Height for trough detection (Pa)",
     )
     parser.add_argument("--peak-height", type=float, default=10.0, help="Height for peak detection (Pa)")
+    parser.add_argument("--peak-min-distance", type=int, default=50, help="Minimum distance between peaks (samples) - keeps only tallest peak in each cluster")
     parser.add_argument("--distance_cutoff", type=float, default=0.0, help="Minimum trough-to-trough distance (seconds) for histogram display and filtering")
     parser.add_argument("--interactive", action="store_true", help="Plot peak prominences and set threshold interactively")
     args = parser.parse_args()
@@ -201,6 +242,11 @@ def main() -> None:
         temp_filtered = low_pass(df["Pa_Global"].to_numpy(), fs, cutoff=3.0)
         troughs, trough_props = find_peaks(-temp_filtered, height=args.trough_height)
         peaks, peak_props = find_peaks(temp_filtered, height=args.peak_height)
+        
+        # Filter peaks to keep only the tallest in each cluster for display
+        if len(peaks) > 0:
+            peaks = filter_clustered_peaks(peaks, temp_filtered[peaks], args.peak_min_distance)
+            peak_props = {"peak_heights": temp_filtered[peaks]}
 
         # Calculate trough-to-trough distances in seconds
         if len(troughs) > 1:
@@ -246,6 +292,12 @@ def main() -> None:
         fig.update_yaxes(title_text="Count", row=1, col=3)
         fig.show()
 
+        # Ask user if they want to continue processing this file or skip it
+        user_choice = input("Do you want to continue processing this file? (y/n): ").lower().strip()
+        if user_choice in ['n', 'no']:
+            print(f"Skipping processing for {csv_path}")
+            exit(0)  # Exit the script without processing
+        
         new_trough = float(input(f"Enter new threshold for trough height (current: {args.trough_height}): "))
         args.trough_height = new_trough
         new_peak = float(input(f"Enter new threshold for peak height (current: {args.peak_height}): "))
@@ -260,7 +312,8 @@ def main() -> None:
         distance_cutoff=args.distance_cutoff,
         time_s=time_s.to_numpy(),
         peak_height=args.peak_height,
-        trough_height=args.trough_height
+        trough_height=args.trough_height,
+        peak_min_distance=args.peak_min_distance
     )
 
     # Assign breath index
