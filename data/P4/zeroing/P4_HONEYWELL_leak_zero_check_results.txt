@@ -1,0 +1,2 @@
+Mean: 0.007 Pa
+Standard Deviation: 0.092 Pa
