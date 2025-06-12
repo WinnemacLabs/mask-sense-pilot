@@ -83,11 +83,18 @@ class SerialWorker(threading.Thread):
         self.ser.close()
 
 # ──────────────────────────────────────────────────────────────
-def open_log(label: str):
+def open_log(label: str, participant: str = "unknown", mask: str = "unknown", leak_condition: str = "unknown", exercise: str = "unknown"):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = f"data/rsc_{label}_{ts}.csv" if label else f"data/rsc_{ts}.csv"
+    name = f"data/rsc_{label}.csv" if label else f"data/rsc_{ts}.csv"
     fh = open(name, "w", newline="")
     csv_wr = csv.writer(fh)
+    # write comments with metadata
+    csv_wr.writerow([f"#Label, {label}"])
+    csv_wr.writerow([f"#Participant, {participant}"])
+    csv_wr.writerow([f"#Mask, {mask}"])
+    csv_wr.writerow([f"#Leak Condition, {leak_condition}"])
+    csv_wr.writerow([f"#Exercise, {exercise}"])
+    csv_wr.writerow([f"#Date/time, {ts}"])
     csv_wr.writerow([
         "t_us",
         "Pa_Global","Pa_Vertical","Pa_Horizontal",
@@ -158,8 +165,8 @@ class PressureParticlesSession:
         self.ln0, = self.ax.plot([], [], label="Global")
         self.ln1, = self.ax.plot([], [], label="Vertical")
         self.ln2, = self.ax.plot([], [], label="Horizontal")
-        self.ln3, = self.ax2.plot([], [], linestyle='--', label="Conc1")
-        self.ln4, = self.ax2.plot([], [], linestyle='--', label="Conc2")
+        self.ln3, = self.ax2.plot([], [], linestyle='--', label="Mask Particles")
+        self.ln4, = self.ax2.plot([], [], linestyle='--', label="Ambient Particles")
         self.ax.set_xlabel("Time (s)")
         self.ax.set_ylabel("Pressure (Pa)")
         self.ax2.set_ylabel("Particle Conc.")
