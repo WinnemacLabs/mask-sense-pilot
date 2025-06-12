@@ -8,7 +8,8 @@ Adds optional WRPAS debugging, CLI passthrough, disables flow control,
 and plots pressures and particle concentrations on dual axes.
 
 Commands:
-  start [label]    – begin capture, create rsc_<label>_<YYYYmmdd_HHMMSS>.csv
+  start [label] [--participant P1] [--mask N95] [--fit leak|no_leak] [--exercise breathing]
+                   – begin capture, create rsc_<label>_<YYYYmmdd_HHMMSS>.csv with metadata
   stop             – stop capture, close CSV, freeze plot
   wrpas <command>  – send arbitrary command to WRPAS and echo response
   debug on/off     – toggle WRPAS raw logging and parsed values
@@ -83,11 +84,18 @@ class SerialWorker(threading.Thread):
         self.ser.close()
 
 # ──────────────────────────────────────────────────────────────
-def open_log(label: str):
+def open_log(label: str, participant: str = "unknown", mask: str = "unknown", leak_condition: str = "unknown", exercise: str = "unknown"):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = f"data/rsc_{label}_{ts}.csv" if label else f"data/rsc_{ts}.csv"
+    name = f"data/rsc_{label}.csv" if label else f"data/rsc_{ts}.csv"
     fh = open(name, "w", newline="")
     csv_wr = csv.writer(fh)
+    # write comments with metadata
+    csv_wr.writerow([f"#Label, {label}"])
+    csv_wr.writerow([f"#Participant, {participant}"])
+    csv_wr.writerow([f"#Mask, {mask}"])
+    csv_wr.writerow([f"#Leak Condition, {leak_condition}"])
+    csv_wr.writerow([f"#Exercise, {exercise}"])
+    csv_wr.writerow([f"#Date/time, {ts}"])
     csv_wr.writerow([
         "t_us",
         "Pa_Global","Pa_Vertical","Pa_Horizontal",
@@ -158,8 +166,8 @@ class PressureParticlesSession:
         self.ln0, = self.ax.plot([], [], label="Global")
         self.ln1, = self.ax.plot([], [], label="Vertical")
         self.ln2, = self.ax.plot([], [], label="Horizontal")
-        self.ln3, = self.ax2.plot([], [], linestyle='--', label="Conc1")
-        self.ln4, = self.ax2.plot([], [], linestyle='--', label="Conc2")
+        self.ln3, = self.ax2.plot([], [], linestyle='--', label="Mask Particles")
+        self.ln4, = self.ax2.plot([], [], linestyle='--', label="Ambient Particles")
         self.ax.set_xlabel("Time (s)")
         self.ax.set_ylabel("Pressure (Pa)")
         self.ax2.set_ylabel("Particle Conc.")
@@ -245,11 +253,18 @@ class PressureParticlesSession:
         return self.ln0, self.ln1, self.ln2, self.ln3, self.ln4
 
     # ---------------------------------------------
-    def start_recording(self, label=""):
+    def start_recording(self, label="", participant="unknown", mask_type="unknown", 
+                       fit_condition="unknown", exercise="unknown"):
         if self.capturing:
             print("# already capturing")
             return
-        self.log_fh, self.csv_wr, _ = open_log(label)
+        self.log_fh, self.csv_wr, _ = open_log(
+            label=label, 
+            participant=participant, 
+            mask=mask_type, 
+            leak_condition=fit_condition, 
+            exercise=exercise
+        )
         self.ts_buf.clear(); self.p_g.clear(); self.p_v.clear(); self.p_h.clear()
         self.conc1_buf.clear(); self.conc2_buf.clear()
         if self.wrpas_worker:
@@ -282,7 +297,8 @@ class PressureParticlesSession:
 
     # ---------------------------------------------
     def run_cli(self):
-        print("Type 'start', 'stop', 'wrpas <cmd>', 'debug on/off', or 'exit'\n")
+        print("Type 'start [label]', 'stop', 'wrpas <cmd>', 'debug on/off', or 'exit'")
+        print("Extended start syntax: start [label] [--participant P1] [--mask N95] [--fit leak|no_leak] [--exercise breathing]\n")
         try:
             while True:
                 cmd = input(CMD_PROMPT).strip()
@@ -291,8 +307,35 @@ class PressureParticlesSession:
                 low = cmd.lower()
 
                 if low.startswith("start"):
-                    label = cmd.split(maxsplit=1)[1] if ' ' in cmd else ""
-                    self.start_recording(label)
+                    # Parse extended command format
+                    parts = cmd.split()
+                    label = parts[1] if len(parts) > 1 and not parts[1].startswith('--') else ""
+                    
+                    # Default values
+                    participant = "unknown"
+                    mask_type = "unknown"
+                    fit_condition = "unknown"
+                    exercise = "unknown"
+                    
+                    # Parse optional parameters
+                    i = 2 if label else 1
+                    while i < len(parts):
+                        if parts[i] == "--participant" and i + 1 < len(parts):
+                            participant = parts[i + 1]
+                            i += 2
+                        elif parts[i] == "--mask" and i + 1 < len(parts):
+                            mask_type = parts[i + 1]
+                            i += 2
+                        elif parts[i] == "--fit" and i + 1 < len(parts):
+                            fit_condition = parts[i + 1]
+                            i += 2
+                        elif parts[i] == "--exercise" and i + 1 < len(parts):
+                            exercise = parts[i + 1]
+                            i += 2
+                        else:
+                            i += 1
+                    
+                    self.start_recording(label, participant, mask_type, fit_condition, exercise)
                     continue
                 if low == "stop":
                     self.stop_recording()
