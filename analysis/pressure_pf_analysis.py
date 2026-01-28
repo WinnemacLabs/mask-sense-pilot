@@ -151,24 +151,55 @@ def extract_pressure_features(df: pd.DataFrame) -> dict:
         # Low-pass filter for breathing detection
         try:
             nyq = fs / 2
-            cutoff = min(3.0, nyq * 0.9)  # 3 Hz or 90% of Nyquist
+            cutoff = min(1.5, nyq * 0.9)  # 1.5 Hz - breathing is typically 0.1-0.5 Hz
             b, a = butter(4, cutoff / nyq, btype="low")
             pa_filtered = filtfilt(b, a, pa)
 
-            # Find breath peaks (inhalation = negative pressure)
-            peaks, properties = find_peaks(-pa_filtered, prominence=0.5, distance=int(fs * 0.5))
+            # Adaptive prominence threshold based on signal range
+            # Use interquartile range to be robust to outliers
+            signal_iqr = np.percentile(pa_filtered, 75) - np.percentile(pa_filtered, 25)
+            prominence_threshold = max(signal_iqr * 0.3, 2.0)  # At least 30% of IQR or 2 Pa
 
-            if len(peaks) > 1:
-                # Breathing rate
+            # Min distance: assume breathing rate between 6-40 breaths/min
+            # That's 1.5-10 seconds per breath, use 1.5s minimum
+            min_distance = int(fs * 1.5)
+
+            # Find negative peaks (inhalation creates negative pressure in mask)
+            neg_peaks, neg_props = find_peaks(
+                -pa_filtered,
+                prominence=prominence_threshold,
+                distance=min_distance
+            )
+
+            # Also find positive peaks (exhalation)
+            pos_peaks, pos_props = find_peaks(
+                pa_filtered,
+                prominence=prominence_threshold,
+                distance=min_distance
+            )
+
+            # Use the more reliable of the two (should be similar)
+            n_breaths = max(len(neg_peaks), len(pos_peaks))
+
+            if n_breaths > 1:
                 duration_s = (t_us[-1] - t_us[0]) / 1e6
-                features["breathing_rate_bpm"] = len(peaks) / duration_s * 60
+                features["breathing_rate_bpm"] = n_breaths / duration_s * 60
 
-                # Breath amplitudes
-                amplitudes = properties.get("prominences", [])
-                if len(amplitudes) > 0:
-                    features["breath_amplitude_mean"] = np.mean(amplitudes)
-                    features["breath_amplitude_std"] = np.std(amplitudes)
-                    features["breath_amplitude_cv"] = np.std(amplitudes) / (np.mean(amplitudes) + EPSILON)
+                # Breath amplitude: peak-to-trough for each breath cycle
+                # Use negative peak prominences as they represent inhalation depth
+                if len(neg_props.get("prominences", [])) > 0:
+                    neg_amplitudes = neg_props["prominences"]
+                    features["breath_amplitude_mean"] = np.mean(neg_amplitudes)
+                    features["breath_amplitude_std"] = np.std(neg_amplitudes)
+                    features["breath_amplitude_cv"] = np.std(neg_amplitudes) / (np.mean(neg_amplitudes) + EPSILON)
+
+                # Full breath amplitude (peak to trough)
+                if len(pos_peaks) > 0 and len(neg_peaks) > 0:
+                    # Estimate full amplitude from signal range within breathing band
+                    features["breath_full_amplitude"] = (
+                        np.mean(pa_filtered[pos_peaks]) - np.mean(pa_filtered[neg_peaks])
+                    )
+
         except Exception:
             pass  # Skip if filtering fails
 
