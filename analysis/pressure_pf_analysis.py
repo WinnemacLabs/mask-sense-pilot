@@ -326,20 +326,23 @@ def plot_correlation_heatmap(df: pd.DataFrame, correlations: pd.Series, output_p
 
 
 def plot_top_feature_scatter(df: pd.DataFrame, correlations: pd.Series, output_path: Path):
-    """Plot scatter plots of top correlated features vs PF."""
+    """Plot scatter plots of top correlated features vs PF, colored by mask type."""
     top_features = correlations.head(6).index.tolist()
 
     fig, axes = plt.subplots(2, 3, figsize=(14, 9))
     axes = axes.flatten()
 
-    for ax, feature in zip(axes, top_features):
-        valid = df[[feature, "log_pf", "condition"]].dropna()
+    # Color by mask type (a real physical factor)
+    mask_colors = {"AURA": "blue", "MAKTEK": "green", "HONEYWELL": "orange"}
 
-        for condition in valid["condition"].unique():
-            subset = valid[valid["condition"] == condition]
-            marker = "o" if condition == "no_leak" else "x"
-            ax.scatter(subset[feature], subset["log_pf"], label=condition,
-                      marker=marker, alpha=0.7)
+    for ax, feature in zip(axes, top_features):
+        valid = df[[feature, "log_pf", "mask"]].dropna()
+
+        for mask in valid["mask"].unique():
+            subset = valid[valid["mask"] == mask]
+            color = mask_colors.get(mask, "gray")
+            ax.scatter(subset[feature], subset["log_pf"], label=mask,
+                      c=color, alpha=0.7)
 
         r = correlations[feature]
         ax.set_xlabel(feature)
@@ -448,7 +451,7 @@ def train_regression_model(df: pd.DataFrame) -> dict:
     ).sort_values(ascending=False)
 
     results["y_true"] = y
-    results["condition"] = df["condition"].values
+    results["mask"] = df["mask"].values
     results["feature_cols"] = feature_cols
     results["selected_features"] = selected_features
 
@@ -456,11 +459,14 @@ def train_regression_model(df: pd.DataFrame) -> dict:
 
 
 def plot_regression_results(df: pd.DataFrame, results: dict, output_path: Path):
-    """Plot predicted vs actual protection factor."""
+    """Plot predicted vs actual protection factor, colored by mask type."""
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
     y_true = results["y_true"]
-    condition = results.get("condition", ["unknown"] * len(y_true))
+    masks = results.get("mask", ["unknown"] * len(y_true))
+
+    # Color by mask type
+    mask_colors = {"AURA": "blue", "MAKTEK": "green", "HONEYWELL": "orange"}
 
     models = [
         ("ridge", "Ridge Regression"),
@@ -474,8 +480,8 @@ def plot_regression_results(df: pd.DataFrame, results: dict, output_path: Path):
         y_pred = results[name]["y_pred"]
         r2 = results[name]["r2"]
 
-        # Color by condition
-        colors = ["blue" if c == "no_leak" else "orange" for c in condition]
+        # Color by mask type
+        colors = [mask_colors.get(m, "gray") for m in masks]
         ax.scatter(y_true, y_pred, c=colors, alpha=0.6)
 
         # Perfect prediction line
@@ -512,19 +518,31 @@ def plot_feature_importance(results: dict, output_path: Path):
     print(f"Saved feature importance to {output_path}")
 
 
-def plot_condition_comparison(df: pd.DataFrame, output_path: Path):
-    """Plot protection factor distribution by condition."""
+def plot_pf_by_mask(df: pd.DataFrame, output_path: Path):
+    """Plot protection factor distribution by mask type."""
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    df.boxplot(column="log_pf", by="condition", ax=ax)
-    ax.set_xlabel("Fit Condition")
+    # Order masks by median PF
+    mask_order = df.groupby("mask")["log_pf"].median().sort_values(ascending=False).index.tolist()
+
+    df_ordered = df.copy()
+    df_ordered["mask"] = pd.Categorical(df_ordered["mask"], categories=mask_order, ordered=True)
+    df_ordered = df_ordered.sort_values("mask")
+
+    df_ordered.boxplot(column="log_pf", by="mask", ax=ax)
+    ax.set_xlabel("Mask Type")
     ax.set_ylabel("log10(Protection Factor)")
-    ax.set_title("Protection Factor by Fit Condition")
+    ax.set_title("Protection Factor Distribution by Mask Type")
     plt.suptitle("")  # Remove automatic title
+
+    # Add horizontal lines for reference PF values
+    ax.axhline(np.log10(10), color="red", linestyle="--", alpha=0.5, label="PF=10 (N95 APF)")
+    ax.axhline(np.log10(100), color="green", linestyle="--", alpha=0.5, label="PF=100 (fit test threshold)")
+    ax.legend(loc="upper right")
 
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
-    print(f"Saved condition comparison to {output_path}")
+    print(f"Saved PF by mask plot to {output_path}")
 
 
 def main():
@@ -551,11 +569,17 @@ def main():
     print("=" * 60)
     print(f"Total recordings: {len(df)}")
     print(f"Participants: {df['participant'].nunique()} ({', '.join(sorted(df['participant'].unique()))})")
-    print(f"Masks: {', '.join(sorted(df['mask'].unique()))}")
-    print(f"Conditions: {df['condition'].value_counts().to_dict()}")
     print(f"Exercises: {df['exercise'].value_counts().to_dict()}")
     print(f"\nProtection Factor range: {df['protection_factor'].min():.1f} - {df['protection_factor'].max():.1f}")
     print(f"Log10(PF) range: {df['log_pf'].min():.2f} - {df['log_pf'].max():.2f}")
+
+    # PF by mask type
+    print("\nProtection Factor by Mask Type:")
+    for mask in sorted(df["mask"].unique()):
+        subset = df[df["mask"] == mask]
+        median_pf = subset["protection_factor"].median()
+        n = len(subset)
+        print(f"  {mask}: median PF = {median_pf:.1f}, n = {n}")
 
     # Correlation analysis
     print("\n" + "=" * 60)
@@ -569,7 +593,7 @@ def main():
     # Plot correlations
     plot_correlation_heatmap(df, correlations, OUTPUT_DIR / "correlation_heatmap.png")
     plot_top_feature_scatter(df, correlations, OUTPUT_DIR / "feature_scatter.png")
-    plot_condition_comparison(df, OUTPUT_DIR / "condition_comparison.png")
+    plot_pf_by_mask(df, OUTPUT_DIR / "pf_by_mask.png")
 
     # Regression modeling
     print("\n" + "=" * 60)
