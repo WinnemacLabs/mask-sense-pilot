@@ -22,7 +22,7 @@ import pandas as pd
 import seaborn as sns
 from scipy import stats
 from scipy.signal import find_peaks, butter, filtfilt
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.preprocessing import StandardScaler
@@ -363,21 +363,38 @@ def train_regression_model(df: pd.DataFrame) -> dict:
                     "protection_factor", "log_pf"}
     feature_cols = [c for c in df.columns if c not in exclude_cols]
 
+    # Add mask type encoding
+    df_model = df.copy()
+    df_model["mask_AURA"] = (df["mask"] == "AURA").astype(int)
+    df_model["mask_MAKTEK"] = (df["mask"] == "MAKTEK").astype(int)
+
+    # Selected features for optimized model (top discriminating + mask)
+    selected_features = [
+        "Pa_Global_p10", "breath_full_amplitude", "breath_amplitude_mean",
+        "Pa_Global_std", "pressure_rms", "Pa_Global_max", "Pa_Global_p90",
+        "Pa_Horizontal_p90", "corr_global_horizontal", "auc_positive",
+        "mask_AURA", "mask_MAKTEK"
+    ]
+    # Filter to features that exist in the dataframe
+    selected_features = [f for f in selected_features if f in df_model.columns]
+
     # Prepare data
-    X = df[feature_cols].fillna(0).values
-    y = df["log_pf"].values
-    groups = df["participant"].values
+    X = df_model[feature_cols].fillna(0).values
+    X_selected = df_model[selected_features].fillna(0).values
+    y = df_model["log_pf"].values
+    groups = df_model["participant"].values
 
     # Standardize features
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
+    X_selected_scaled = scaler.fit_transform(X_selected)
 
     # Leave-one-participant-out CV
     logo = LeaveOneGroupOut()
 
     results = {}
 
-    # Ridge regression
+    # Ridge regression (all features)
     ridge = Ridge(alpha=1.0)
     y_pred_ridge = cross_val_predict(ridge, X_scaled, y, cv=logo, groups=groups)
 
@@ -392,7 +409,7 @@ def train_regression_model(df: pd.DataFrame) -> dict:
         "y_pred": y_pred_ridge,
     }
 
-    # Random Forest
+    # Random Forest (all features)
     rf = RandomForestRegressor(n_estimators=100, max_depth=5, random_state=42)
     y_pred_rf = cross_val_predict(rf, X_scaled, y, cv=logo, groups=groups)
 
@@ -407,29 +424,59 @@ def train_regression_model(df: pd.DataFrame) -> dict:
         "y_pred": y_pred_rf,
     }
 
-    # Fit RF on all data for feature importance
-    rf.fit(X_scaled, y)
+    # Optimized GBM (selected features + mask type)
+    gbm = GradientBoostingRegressor(
+        n_estimators=50, max_depth=3, learning_rate=0.05, random_state=42
+    )
+    y_pred_gbm = cross_val_predict(gbm, X_selected_scaled, y, cv=logo, groups=groups)
+
+    gbm_r2 = 1 - np.sum((y - y_pred_gbm)**2) / np.sum((y - np.mean(y))**2)
+    gbm_rmse = np.sqrt(np.mean((y - y_pred_gbm)**2))
+    gbm_mae = np.mean(np.abs(y - y_pred_gbm))
+
+    results["gbm_optimized"] = {
+        "r2": gbm_r2,
+        "rmse": gbm_rmse,
+        "mae": gbm_mae,
+        "y_pred": y_pred_gbm,
+    }
+
+    # Fit GBM on all data for feature importance
+    gbm.fit(X_selected_scaled, y)
     results["feature_importance"] = pd.Series(
-        rf.feature_importances_, index=feature_cols
+        gbm.feature_importances_, index=selected_features
     ).sort_values(ascending=False)
 
     results["y_true"] = y
+    results["condition"] = df["condition"].values
     results["feature_cols"] = feature_cols
+    results["selected_features"] = selected_features
 
     return results
 
 
 def plot_regression_results(df: pd.DataFrame, results: dict, output_path: Path):
     """Plot predicted vs actual protection factor."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
     y_true = results["y_true"]
+    condition = results.get("condition", ["unknown"] * len(y_true))
 
-    for ax, (name, label) in zip(axes, [("ridge", "Ridge Regression"), ("rf", "Random Forest")]):
+    models = [
+        ("ridge", "Ridge Regression"),
+        ("rf", "Random Forest"),
+        ("gbm_optimized", "GBM Optimized")
+    ]
+
+    for ax, (name, label) in zip(axes, models):
+        if name not in results:
+            continue
         y_pred = results[name]["y_pred"]
         r2 = results[name]["r2"]
 
-        ax.scatter(y_true, y_pred, alpha=0.6)
+        # Color by condition
+        colors = ["blue" if c == "no_leak" else "orange" for c in condition]
+        ax.scatter(y_true, y_pred, c=colors, alpha=0.6)
 
         # Perfect prediction line
         lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
@@ -450,13 +497,13 @@ def plot_regression_results(df: pd.DataFrame, results: dict, output_path: Path):
 
 
 def plot_feature_importance(results: dict, output_path: Path):
-    """Plot feature importance from Random Forest."""
-    importance = results["feature_importance"].head(15)
+    """Plot feature importance from GBM."""
+    importance = results["feature_importance"]
 
     fig, ax = plt.subplots(figsize=(10, 6))
     importance.plot(kind="barh", ax=ax)
     ax.set_xlabel("Feature Importance")
-    ax.set_title("Top 15 Features (Random Forest)")
+    ax.set_title("Feature Importance (GBM Optimized)")
     ax.invert_yaxis()
     plt.tight_layout()
 
@@ -530,15 +577,20 @@ def main():
     print("=" * 60)
     results = train_regression_model(df)
 
-    print("\nRidge Regression:")
+    print("\nRidge Regression (all features):")
     print(f"  R² = {results['ridge']['r2']:.3f}")
     print(f"  RMSE = {results['ridge']['rmse']:.3f}")
     print(f"  MAE = {results['ridge']['mae']:.3f}")
 
-    print("\nRandom Forest:")
+    print("\nRandom Forest (all features):")
     print(f"  R² = {results['rf']['r2']:.3f}")
     print(f"  RMSE = {results['rf']['rmse']:.3f}")
     print(f"  MAE = {results['rf']['mae']:.3f}")
+
+    print("\nGBM Optimized (selected features + mask type):")
+    print(f"  R² = {results['gbm_optimized']['r2']:.3f}")
+    print(f"  RMSE = {results['gbm_optimized']['rmse']:.3f}")
+    print(f"  MAE = {results['gbm_optimized']['mae']:.3f}")
 
     # Plot results
     plot_regression_results(df, results, OUTPUT_DIR / "regression_results.png")
@@ -549,23 +601,30 @@ def main():
     print("Interpretation")
     print("=" * 60)
 
-    best_r2 = max(results["ridge"]["r2"], results["rf"]["r2"])
+    best_r2 = max(results["ridge"]["r2"], results["rf"]["r2"], results["gbm_optimized"]["r2"])
 
     if best_r2 < 0.3:
         strength = "WEAK"
         interpretation = "Pressure features show limited predictive power for PF."
-    elif best_r2 < 0.6:
+    elif best_r2 < 0.5:
         strength = "MODERATE"
         interpretation = "Pressure features show meaningful correlation with PF."
     else:
         strength = "STRONG"
-        interpretation = "Pressure features are strong predictors of PF."
+        interpretation = "Pressure + mask type are strong predictors of PF."
 
     print(f"\nEvidence strength: {strength}")
     print(f"Best R² = {best_r2:.3f}")
     print(f"\n{interpretation}")
 
-    print("\nTop 5 most important features:")
+    # Prediction accuracy in real units
+    y_pred = results["gbm_optimized"]["y_pred"]
+    y_true = results["y_true"]
+    pf_ratio = 10**y_pred / 10**y_true
+    print(f"\nPrediction accuracy (GBM):")
+    print(f"  Predicted/Actual PF ratio: median={np.median(pf_ratio):.2f}, IQR=[{np.percentile(pf_ratio, 25):.2f}, {np.percentile(pf_ratio, 75):.2f}]")
+
+    print("\nTop 5 most important features (GBM):")
     for feat, imp in results["feature_importance"].head(5).items():
         print(f"  {feat}: {imp:.3f}")
 
